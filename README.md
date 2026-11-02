@@ -11,7 +11,7 @@ data. Read the [security model](SECURITY.md) before deploying for a company.
 
 ## What works
 
-- Upload or paste self-contained HTML with inline JavaScript and CSS, up to 1 MB.
+- Upload self-contained HTML with inline JavaScript and CSS, up to 1 MB.
 - Search the catalog, copy stable authenticated links, open isolated interactive
   previews, and edit existing artifacts.
 - Every DEV save is a Git commit; no review is needed to save a draft.
@@ -47,22 +47,25 @@ API calls, and general server-side execution are intentionally out of scope.
 
 ## Edit an artifact with Claude
 
-1. Open a tool in the catalog and select **Download source**. This downloads the
+1. Open a tool in the catalog and select **Download artifact**. This downloads the
    exact displayed version, not a newer draft that somebody may have saved.
 2. Attach the HTML file to Claude and ask for changes. Keep the output as one
    self-contained HTML file, following the restrictions above.
 3. Open that same tool in **Development** and choose **Upload revised version**.
    The dialog displays the target artifact and its stable ID.
-4. Choose Claude's revised file, inspect the source and metadata, and **Save to DEV**.
+4. Choose Claude's revised file, check its file name and details, and **Save to DEV**.
    The file name can change: identity comes from the selected tool, not the name.
    The artifact keeps its owner, history, and shared link.
 5. Test the updated preview and choose **Request publication**. Production remains
    unchanged until a different authorized reviewer approves and publishes.
 
-Use **Edit source** for direct changes in the browser. **Version history** can
-restore an older version to the editor. If another user has saved changes since
-you opened the editor, saving is rejected; reconcile against the latest DEV
-version rather than overwriting it.
+The app does not display or edit source code. **View code on GitHub** opens the
+selected revision, and review pages link to the PR's code diff. The app shows the
+interactive preview and data grants instead. To update metadata only, open
+**Upload revised version**, adjust the details, and save without choosing a file.
+**Version history** can restore an older version to the update dialog. If another
+user has saved changes since you opened it, saving is rejected; reconcile against
+the latest DEV version rather than overwriting it.
 
 **Upload new artifact** at the top of the library creates a separate tool. It
 never guesses which existing artifact to replace based on the file name.
