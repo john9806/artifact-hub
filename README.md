@@ -12,7 +12,8 @@ data. Read the [security model](SECURITY.md) before deploying for a company.
 ## What works
 
 - Upload or paste self-contained HTML with inline JavaScript and CSS, up to 1 MB.
-- Search the catalog, open isolated interactive previews, edit existing artifacts.
+- Search the catalog, copy stable authenticated links, open isolated interactive
+  previews, and edit existing artifacts.
 - Every DEV save is a Git commit; no review is needed to save a draft.
 - Request publication through an artifact-scoped GitHub pull request.
 - The PR's `artifact-hub/validated` check links to its authenticated live preview.

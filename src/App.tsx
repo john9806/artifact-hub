@@ -17,10 +17,12 @@ type EditorState = {
 };
 const emptyEditor = (): EditorState => ({ expectedRevision: null, title: "", description: "", html: "", allowedMembers: [] });
 const displayDate = (date: string) => new Date(date).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const libraryUrl = (environment: Environment, id?: string) =>
+  `/?${new URLSearchParams({ environment, ...(id ? { artifact: id } : {}) })}`;
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
-  const [environment, setEnvironment] = useState<Environment>("dev");
+  const [environment, setEnvironment] = useState<Environment>(new URLSearchParams(location.search).get("environment") === "prod" ? "prod" : "dev");
   const [view, setView] = useState<"library" | "reviews">(new URLSearchParams(location.search).get("view") === "reviews" ? "reviews" : "library");
   const [artifacts, setArtifacts] = useState<ArtifactSummary[]>([]);
   const [selected, setSelected] = useState<Artifact | null>(null);
@@ -55,6 +57,11 @@ export function App() {
     } else {
       const results = await api<ArtifactSummary[]>(`/api/artifacts?environment=${environment}`, "GET", undefined, signal);
       if (!signal?.aborted) setArtifacts(results);
+      const linkedId = new URLSearchParams(location.search).get("artifact");
+      if (linkedId) {
+        const artifact = await api<Artifact>(`/api/artifacts/${encodeURIComponent(linkedId)}?environment=${environment}`, "GET", undefined, signal);
+        if (!signal?.aborted) setSelected(artifact);
+      }
     }
   }, [session?.user, environment, reviewNumber, view]);
 
@@ -74,9 +81,11 @@ export function App() {
   const open = async (id: string) => {
     setShowHistory(false); setHistory([]);
     setSelected(await api<Artifact>(`/api/artifacts/${id}?environment=${environment}`));
+    window.history.replaceState({}, "", libraryUrl(environment, id));
   };
   const changeEnvironment = (value: Environment) => {
     setEnvironment(value); setSelected(null); setShowHistory(false); setError("");
+    window.history.replaceState({}, "", libraryUrl(value));
   };
   const edit = (artifact: Artifact) => {
     setEditor({
@@ -91,6 +100,7 @@ export function App() {
       const { id, ...body } = editor;
       const result = await api<Artifact>(id ? `/api/artifacts/${id}` : "/api/artifacts", id ? "PUT" : "POST", body);
       setEnvironment("dev"); setView("library"); setSelected(result); setEditor(null); setShowHistory(false);
+      window.history.replaceState({}, "", libraryUrl("dev", result.id));
       setArtifacts(await api<ArtifactSummary[]>("/api/artifacts?environment=dev"));
       setNotice("Saved to DEV and committed to Git. Production is unchanged.");
     });
@@ -128,10 +138,10 @@ export function App() {
       <div className="workspace-label">TEAM WORKSPACE</div>
       <nav aria-label="Main navigation">
         <button className={view === "library" && !reviewNumber ? "nav-item active" : "nav-item"} onClick={() => {
-          if (reviewNumber) location.href = "/"; else { setView("library"); setSelected(null); }
+          if (reviewNumber) location.href = "/"; else { setView("library"); setSelected(null); window.history.replaceState({}, "", libraryUrl(environment)); }
         }}><span className="nav-symbol">&#9638;</span> Artifact library <span className="count">{artifacts.length}</span></button>
         <button className={view === "reviews" || reviewNumber ? "nav-item active" : "nav-item"} onClick={() => {
-          if (reviewNumber) location.href = "/?view=reviews"; else { setView("reviews"); setSelected(null); }
+          if (reviewNumber) location.href = "/?view=reviews"; else { setView("reviews"); setSelected(null); window.history.replaceState({}, "", "/?view=reviews"); }
         }}><span className="nav-symbol">&#8644;</span> Publication reviews</button>
         <a className="nav-item" href={`https://github.com/${session.repository}`} target="_blank" rel="noreferrer"><span className="nav-symbol">&#9095;</span> Git repository <span className="external">&#8599;</span></a>
       </nav>
@@ -171,9 +181,13 @@ export function App() {
           <section className="intro-banner"><div className="banner-icon">&#10023;</div><div><strong>From AI output to a team asset.</strong><p>Upload a self-contained HTML tool. Experiment in DEV. Preview and approve before it reaches PROD.</p></div><span className="badge">HTML + JAVASCRIPT</span></section>
           <div className="library-toolbar"><div className="tabs" aria-label="Environment"><button className={environment === "dev" ? "selected" : ""} onClick={() => changeEnvironment("dev")}><span className="dev-dot" /> Development</button><button className={environment === "prod" ? "selected" : ""} onClick={() => changeEnvironment("prod")}><span className="status-dot" /> Production</button></div><label className="search"><span>&#9906;</span><input aria-label="Search artifacts" placeholder="Search artifacts or owners..." value={search} onChange={(event) => setSearch(event.target.value)} /></label></div>
           {selected ? <section className="artifact-detail">
-            <button className="text-button back" onClick={() => { setSelected(null); setShowHistory(false); }}>&#8592; All artifacts</button>
+            <button className="text-button back" onClick={() => { setSelected(null); setShowHistory(false); window.history.replaceState({}, "", libraryUrl(environment)); }}>&#8592; All artifacts</button>
             <div className="detail-heading"><div><h2>{selected.title}</h2><p>{selected.description}</p><div className="metadata">@{selected.owner} <span>/</span> {selected.digest.slice(0, 12)} <span>/</span> {environment === "dev" ? "Development draft" : "Approved production"}</div></div>
               <div className="action-row">
+                <button className="button secondary" onClick={() => void perform(async () => {
+                  await navigator.clipboard.writeText(`${location.origin}${libraryUrl(environment, selected.id)}`);
+                  setNotice("Artifact link copied. Recipients must sign in to this workspace.");
+                })}>Copy link</button>
                 {environment === "dev" && session.user.canWrite && <><button className="button secondary" onClick={() => edit(selected)}>Edit artifact</button><button className="button primary" disabled={busy} onClick={() => void perform(async () => {
                   const promotion = await api<Promotion>(`/api/artifacts/${selected.id}/promote`, "POST", { expectedRevision: selected.revision });
                   location.href = `/review/${promotion.number}`;
