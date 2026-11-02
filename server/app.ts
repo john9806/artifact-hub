@@ -8,7 +8,7 @@ import { type Config } from "./config.js";
 import { HttpError } from "./errors.js";
 import { signToken, verifyToken } from "./tokens.js";
 import { Library } from "./library.js";
-import { artifactCsp, frameDocument } from "./frame.js";
+import { applicationCsp, artifactCsp, frameDocument } from "./frame.js";
 import { queryCube } from "./cube.js";
 
 const sessionPayload = z.object({ kind: z.literal("session"), login: z.string(), exp: z.number() });
@@ -25,7 +25,7 @@ const previewRequestSchema = z.object({
   expectedRevision: shaSchema.optional(),
 }).strict();
 
-export function createApps(config: Config, library: Library, frontend?: RequestHandler) {
+export function createApps(config: Config, library: Library, frontend?: { middleware: RequestHandler; nonce: string }) {
   const app = express();
   const artifacts = express();
   const cookieName = config.localDevelopment ? "artifact_hub_session" : "__Host-artifact_hub_session";
@@ -67,7 +67,7 @@ export function createApps(config: Config, library: Library, frontend?: RequestH
       "Cache-Control": "no-store",
       "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
       "Content-Security-Policy": frame ? artifactCsp(config.appOrigin) :
-        `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src ${config.artifactOrigin}; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
+        applicationCsp(config.appOrigin, config.artifactOrigin, frontend?.nonce),
     });
     if (!frame) response.set("X-Frame-Options", "DENY");
     next();
@@ -237,7 +237,7 @@ export function createApps(config: Config, library: Library, frontend?: RequestH
   });
   artifacts.use((_request, response) => response.status(404).send("Not found."));
   app.use("/api", (_request, _response) => { throw new HttpError(404, "API endpoint not found."); });
-  if (frontend) app.use(frontend);
+  if (frontend) app.use(frontend.middleware);
   app.use(express.static(path.resolve("dist/client"), { index: false }));
   app.get(["/", "/review/:number"], (_request, response) => response.sendFile(path.resolve("dist/client/index.html")));
   const errorHandler: ErrorRequestHandler = (error: unknown, _request, response, _next) => {

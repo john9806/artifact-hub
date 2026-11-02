@@ -111,6 +111,10 @@ Open **http://localhost:3000**, select **Enter local development**, and try the
 synthetic price simulator. Previews are served from **http://127.0.0.1:3001**:
 different hostnames, not merely different ports.
 
+The development server uses CSP nonces for Vite's inline preamble. Hot reload uses
+the app's own listener, with an explicit same-host WebSocket CSP grant only in
+development; it does not open a separate Vite network port.
+
 For a local test of real review/publishing, sign out, sign in through GitHub with
 the configured real accounts, review the PR on GitHub, then return to the PR
 preview and select **Refresh approval** and **Publish approved version**.

@@ -1,5 +1,7 @@
 import { mkdir, open, unlink } from "node:fs/promises";
 import { loadEnvFile } from "node:process";
+import { randomBytes } from "node:crypto";
+import { createServer as createHttpServer } from "node:http";
 import path from "node:path";
 import { loadConfig } from "./config.js";
 import { GitStore } from "./git.js";
@@ -29,17 +31,21 @@ try {
     reviewers: config.reviewers,
     cubeMembers: config.cubeMembers,
   });
+  const httpServer = createHttpServer();
   let frontend;
   if (process.env.NODE_ENV !== "production") {
     const { createServer } = await import("vite");
+    const nonce = randomBytes(24).toString("base64");
     const vite = await createServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: { server: httpServer } },
+      html: { cspNonce: nonce },
       appType: "spa",
     });
-    frontend = vite.middlewares;
+    frontend = { middleware: vite.middlewares, nonce };
   }
   const { app, artifacts } = createApps(config, library, frontend);
-  const appServer = app.listen(config.port, config.host, () => console.log(`Artifact Hub: ${config.appOrigin}`));
+  httpServer.on("request", app);
+  const appServer = httpServer.listen(config.port, config.host, () => console.log(`Artifact Hub: ${config.appOrigin}`));
   const artifactServer = artifacts.listen(config.artifactPort, config.host, () => console.log(`Artifact previews: ${config.artifactOrigin}`));
   const shutdown = async () => {
     appServer.close();

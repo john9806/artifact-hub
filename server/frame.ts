@@ -41,3 +41,13 @@ export function artifactCsp(appOrigin: string): string {
     "sandbox allow-scripts", `frame-ancestors ${appOrigin}`,
   ].join("; ");
 }
+
+export function applicationCsp(appOrigin: string, artifactOrigin: string, developmentNonce?: string): string {
+  const nonce = developmentNonce ? ` 'nonce-${developmentNonce}'` : "";
+  const socket = developmentNonce ? ` ${appOrigin.replace(/^http/, "ws")}` : "";
+  return [
+    "default-src 'self'", `script-src 'self'${nonce}`, `style-src 'self'${nonce}`,
+    "img-src 'self' data:", `connect-src 'self'${socket}`, `frame-src ${artifactOrigin}`,
+    "object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'",
+  ].join("; ");
+}

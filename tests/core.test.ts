@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { loadConfig } from "../server/config.js";
 import { signToken, verifyToken } from "../server/tokens.js";
 import { validateCubeQuery } from "../server/cube.js";
-import { artifactCsp, frameDocument } from "../server/frame.js";
+import { applicationCsp, artifactCsp, frameDocument } from "../server/frame.js";
 import { reviewDecision } from "../server/github.js";
 import { MAX_HTML_BYTES, inputSchema } from "../shared/model.js";
 import { config } from "./helpers.js";
@@ -84,4 +84,15 @@ test("input validates exact supported shape and payload size", () => {
   assert.throws(() => inputSchema.parse({ ...valid, title: "" }));
   assert.throws(() => inputSchema.parse({ ...valid, html: "x".repeat(MAX_HTML_BYTES + 1) }));
   assert.throws(() => inputSchema.parse({ ...valid, backend: "python" }));
+});
+
+test("development CSP grants only the Vite nonce and app socket, without weakening production", () => {
+  const development = applicationCsp(config.appOrigin, config.artifactOrigin, "test-nonce");
+  assert.ok(development.includes("script-src 'self' 'nonce-test-nonce'"));
+  assert.ok(development.includes("connect-src 'self' ws://localhost:3000"));
+  assert.ok(!development.includes("unsafe-inline"));
+  const production = applicationCsp("https://hub.example.com", "https://preview.example.net");
+  assert.ok(!production.includes("nonce-"));
+  assert.ok(!production.includes("wss:"));
+  assert.ok(!production.includes("unsafe-inline"));
 });
