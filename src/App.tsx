@@ -27,6 +27,7 @@ export function App() {
   const [artifacts, setArtifacts] = useState<ArtifactSummary[]>([]);
   const [selected, setSelected] = useState<Artifact | null>(null);
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [replacing, setReplacing] = useState(false);
   const [history, setHistory] = useState<History>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [pulls, setPulls] = useState<PullSummary[]>([]);
@@ -87,7 +88,9 @@ export function App() {
     setEnvironment(value); setSelected(null); setShowHistory(false); setError("");
     window.history.replaceState({}, "", libraryUrl(value));
   };
-  const edit = (artifact: Artifact) => {
+  const edit = (artifact: Artifact, replace = false) => {
+    setError("");
+    setReplacing(replace);
     setEditor({
       id: artifact.id, expectedRevision: artifact.revision,
       title: artifact.title, description: artifact.description, html: artifact.html, allowedMembers: artifact.allowedMembers,
@@ -110,7 +113,8 @@ export function App() {
     if (!/\.html?$/i.test(file.name)) { setError("Upload a self-contained .html file. Other formats are not supported yet."); return; }
     if (file.size > MAX_HTML_BYTES) { setError("HTML must be at most 1 MB."); return; }
     await perform(async () => setEditor({
-      ...editor, html: await file.text(), title: editor.title || file.name.replace(/\.html?$/i, "").replaceAll(/[-_]/g, " "),
+      ...editor, html: await file.text(),
+      title: editor.id ? editor.title : editor.title || file.name.replace(/\.html?$/i, "").replaceAll(/[-_]/g, " "),
     }));
   };
   const filtered = artifacts.filter((artifact) =>
@@ -177,18 +181,19 @@ export function App() {
           {loading ? <div className="empty">Loading reviews...</div> : pulls.length ? <div className="review-list">{pulls.map((pull) => <a className="review-row" key={pull.number} href={`/review/${pull.number}`}><span className="tile-icon">&#8644;</span><div><strong>{pull.title}</strong><p>Pull request #{pull.number} / artifact-scoped promotion</p></div><span>Open preview &#8594;</span></a>)}</div> : <div className="empty"><h2>Nothing waiting for review.</h2><p>Request publication from an artifact's DEV version to create a PR.</p></div>}
         </> : <>
           <div className="page-heading"><div><p className="eyebrow">GOOD IDEAS DESERVE A HOME</p><h1>Your team's little superpowers.</h1><p>Simulators, calculators, and useful things. Kept together, ready to use.</p></div>
-            {session.user.canWrite && <button className="button primary" onClick={() => setEditor(emptyEditor())}>+ Upload artifact</button>}</div>
+            {session.user.canWrite && <button className="button primary" onClick={() => { setError(""); setReplacing(false); setEditor(emptyEditor()); }}>+ Upload new artifact</button>}</div>
           <section className="intro-banner"><div className="banner-icon">&#10023;</div><div><strong>From AI output to a team asset.</strong><p>Upload a self-contained HTML tool. Experiment in DEV. Preview and approve before it reaches PROD.</p></div><span className="badge">HTML + JAVASCRIPT</span></section>
           <div className="library-toolbar"><div className="tabs" aria-label="Environment"><button className={environment === "dev" ? "selected" : ""} onClick={() => changeEnvironment("dev")}><span className="dev-dot" /> Development</button><button className={environment === "prod" ? "selected" : ""} onClick={() => changeEnvironment("prod")}><span className="status-dot" /> Production</button></div><label className="search"><span>&#9906;</span><input aria-label="Search artifacts" placeholder="Search artifacts or owners..." value={search} onChange={(event) => setSearch(event.target.value)} /></label></div>
           {selected ? <section className="artifact-detail">
             <button className="text-button back" onClick={() => { setSelected(null); setShowHistory(false); window.history.replaceState({}, "", libraryUrl(environment)); }}>&#8592; All artifacts</button>
             <div className="detail-heading"><div><h2>{selected.title}</h2><p>{selected.description}</p><div className="metadata">@{selected.owner} <span>/</span> {selected.digest.slice(0, 12)} <span>/</span> {environment === "dev" ? "Development draft" : "Approved production"}</div></div>
               <div className="action-row">
+                <a className="button secondary" download href={`/api/artifacts/${selected.id}/source?revision=${selected.revision}`}>Download source</a>
                 <button className="button secondary" onClick={() => void perform(async () => {
                   await navigator.clipboard.writeText(`${location.origin}${libraryUrl(environment, selected.id)}`);
                   setNotice("Artifact link copied. Recipients must sign in to this workspace.");
                 })}>Copy link</button>
-                {environment === "dev" && session.user.canWrite && <><button className="button secondary" onClick={() => edit(selected)}>Edit artifact</button><button className="button primary" disabled={busy} onClick={() => void perform(async () => {
+                {environment === "dev" && session.user.canWrite && <><button className="button secondary" disabled={busy} onClick={() => edit(selected)}>Edit source</button><button className="button secondary" disabled={busy} onClick={() => edit(selected, true)}>Upload revised version</button><button className="button primary" disabled={busy} onClick={() => void perform(async () => {
                   const promotion = await api<Promotion>(`/api/artifacts/${selected.id}/promote`, "POST", { expectedRevision: selected.revision });
                   location.href = `/review/${promotion.number}`;
                 })}>Request publication &#8599;</button></>}
@@ -196,6 +201,7 @@ export function App() {
                   setHistory(await api<History>(`/api/artifacts/${selected.id}/history`)); setShowHistory((value) => !value);
                 })}>Version history</button>
               </div></div>
+            <p>To make changes with Claude, download the source and give Claude the file. Return to this artifact's DEV version and choose <strong>Upload revised version</strong>. Downloaded HTML runs outside the Hub sandbox if opened locally.</p>
             <Preview id={selected.id} revision={selected.revision} source={{ environment }} />
             {showHistory && <section className="history"><h3>Git version history</h3><p>Restoring creates a new DEV revision. Production still requires a new approval.</p>{history.map((item) => <div className="history-row" key={item.revision}><code>{item.revision.slice(0, 10)}</code><span>{item.title}</span><small>{displayDate(item.at)}</small>{session.user?.canWrite && <button className="text-button" disabled={busy} onClick={() => void perform(async () => {
               const [old, current] = await Promise.all([
@@ -216,9 +222,11 @@ export function App() {
       </div>
     </main>
     {editor && <div className="modal-backdrop"><section className="editor-modal" role="dialog" aria-modal="true" aria-labelledby="editor-heading">
-      <div className="modal-heading"><div><p className="eyebrow">SAVE TO DEVELOPMENT</p><h2 id="editor-heading">{editor.id ? "Edit artifact" : "Give your artifact a home."}</h2></div><button className="button ghost" aria-label="Close editor" disabled={busy} onClick={() => setEditor(null)}>Close</button></div>
+      <div className="modal-heading"><div><p className="eyebrow">SAVE TO DEVELOPMENT</p><h2 id="editor-heading">{editor.id ? replacing ? "Upload revised version" : "Edit source" : "Give your artifact a home."}</h2></div><button className="button ghost" aria-label="Close editor" disabled={busy} onClick={() => setEditor(null)}>Close</button></div>
       <form onSubmit={(event) => void save(event)}>
-        <label className="upload-zone" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void upload(event.dataTransfer.files[0]); }}><strong>Drop your HTML artifact here</strong><span>or choose a file / self-contained HTML + inline JavaScript / up to 1 MB</span><input type="file" accept=".html,.htm,text/html" onChange={(event) => void upload(event.target.files?.[0])} /></label>
+        {editor.id ? <div className="notice success"><strong>Updating {selected?.id === editor.id ? selected.title : editor.title}</strong><br />Artifact ID: <code>{editor.id}</code><br />The file name does not select the artifact. This replaces its DEV content and keeps its owner, history, and shared link. Production changes only after a new review.</div> :
+          <p>This creates a new artifact. To update an existing tool instead, open it in DEV and choose <strong>Upload revised version</strong>.</p>}
+        <label className="upload-zone" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!busy) void upload(event.dataTransfer.files[0]); }}><strong>{editor.id ? "Choose the revised HTML file for this artifact" : "Drop your HTML artifact here"}</strong><span>or choose a file / self-contained HTML + inline JavaScript / up to 1 MB</span><input type="file" disabled={busy} accept=".html,.htm,text/html" onChange={(event) => { void upload(event.target.files?.[0]); event.target.value = ""; }} /></label>
         <div className="form-grid"><label>Title<input required maxLength={100} value={editor.title} onChange={(event) => setEditor({ ...editor, title: event.target.value })} /></label><label>Purpose and assumptions<input maxLength={800} value={editor.description} onChange={(event) => setEditor({ ...editor, description: event.target.value })} placeholder="What does it do? What should reviewers verify?" /></label></div>
         <label>HTML source<textarea required spellCheck={false} value={editor.html} onChange={(event) => setEditor({ ...editor, html: event.target.value })} placeholder="Paste a complete HTML document, with its styles and JavaScript included." /></label>
         {session.cubeMembers.length > 0 && <fieldset><legend>Optional Cube data grants</legend><p>Only grant members this artifact needs. Changes are included in publication review.</p><div className="member-list">{session.cubeMembers.map((member) => <label key={member}><input type="checkbox" checked={editor.allowedMembers.includes(member)} onChange={(event) => setEditor({ ...editor, allowedMembers: event.target.checked ? [...editor.allowedMembers, member] : editor.allowedMembers.filter((value) => value !== member) })} />{member}</label>)}</div></fieldset>}

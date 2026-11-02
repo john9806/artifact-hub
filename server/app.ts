@@ -161,6 +161,13 @@ export function createApps(config: Config, library: Library, frontend?: { middle
   app.get("/api/artifacts/:id", async (request, response) => {
     response.json(await library.current(idSchema.parse(request.params.id), environmentSchema.parse(request.query.environment ?? "dev")));
   });
+  app.get("/api/artifacts/:id/source", async (request, response) => {
+    const artifact = await library.get(idSchema.parse(request.params.id), shaSchema.parse(request.query.revision));
+    response.set({
+      "Content-Type": "text/plain; charset=utf-8",
+      "Content-Disposition": `attachment; filename="artifact-${artifact.id}-${artifact.revision.slice(0, 12)}.html"`,
+    }).send(artifact.html);
+  });
   app.put("/api/artifacts/:id", async (request, response) => {
     const user = writer(request);
     const { expectedRevision, ...input } = saveSchema.parse(request.body);

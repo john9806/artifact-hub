@@ -45,6 +45,34 @@ React JSX exports are **not directly supported**. Export/bundle them as a
 self-contained HTML file first. Python, arbitrary npm installs, external scripts,
 API calls, and general server-side execution are intentionally out of scope.
 
+## Edit an artifact with Claude
+
+1. Open a tool in the catalog and select **Download source**. This downloads the
+   exact displayed version, not a newer draft that somebody may have saved.
+2. Attach the HTML file to Claude and ask for changes. Keep the output as one
+   self-contained HTML file, following the restrictions above.
+3. Open that same tool in **Development** and choose **Upload revised version**.
+   The dialog displays the target artifact and its stable ID.
+4. Choose Claude's revised file, inspect the source and metadata, and **Save to DEV**.
+   The file name can change: identity comes from the selected tool, not the name.
+   The artifact keeps its owner, history, and shared link.
+5. Test the updated preview and choose **Request publication**. Production remains
+   unchanged until a different authorized reviewer approves and publishes.
+
+Use **Edit source** for direct changes in the browser. **Version history** can
+restore an older version to the editor. If another user has saved changes since
+you opened the editor, saving is rejected; reconcile against the latest DEV
+version rather than overwriting it.
+
+**Upload new artifact** at the top of the library creates a separate tool. It
+never guesses which existing artifact to replace based on the file name.
+
+Source downloads require sign-in and are served as attachments, not rendered on
+the application origin. The file contains the original artifact, without the
+injected Cube bridge or credentials. Opening downloaded HTML on your own computer
+is outside the Hub sandbox; give the file to Claude rather than trusting local
+execution. Cube-enabled artifacts require the Hub's preview bridge to query data.
+
 ## Repository model: template or fork?
 
 For your own installation, use this repository as a template, or fork it.
