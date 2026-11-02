@@ -1,0 +1,25 @@
+name: Artifact promotion structure
+on:
+  pull_request:
+    paths: ["artifacts/**"]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Never install dependencies or execute code from an artifact promotion.
+      - name: Require artifact-only changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff --name-only "$BASE_SHA...$HEAD_SHA" > /tmp/changed-files
+          if grep -Ev '^artifacts/[a-f0-9-]{36}/artifact\.(html|json)$' /tmp/changed-files; then
+            echo "Artifact promotions must not modify application or workflow files."
+            exit 1
+          fi
+          test -s /tmp/changed-files

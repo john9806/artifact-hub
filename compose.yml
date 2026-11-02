@@ -1,0 +1,23 @@
+services:
+  hub:
+    build: .
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      LOCAL_DEVELOPMENT: "false"
+      DATA_DIR: /data
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - artifact-data:/data
+    init: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    restart: unless-stopped
+volumes:
+  artifact-data:
